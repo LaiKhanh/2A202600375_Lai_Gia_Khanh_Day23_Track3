@@ -3,7 +3,7 @@
 ## 1. Team / student
 
 - Name: Lại Gia Khánh
-- Repo/commit:
+- Repo/commit: https://github.com/LaiKhanh/2A202600375_Lai_Gia_Khanh_Day23_Track3
 - Date: 2026-05-11
 
 ## 2. Architecture
