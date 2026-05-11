@@ -57,7 +57,7 @@ def ask_clarification_node(state: AgentState) -> dict:
     question = "Can you provide the order id or the missing context?"
     return {
         "pending_question": question,
-        "final_answer": question,
+        "final_answer": None,
         "events": [make_event("clarify", "completed", "missing information requested")],
     }
 
@@ -153,16 +153,34 @@ def evaluate_node(state: AgentState) -> dict:
 
     TODO(student): replace heuristic with LLM-as-judge or structured validation.
     """
-    tool_results = state.get("tool_results", [])
+    tool_results = state.get("tool_results", []) or []
     latest = tool_results[-1] if tool_results else ""
-    if "ERROR" in latest:
+    attempt = int(state.get("attempt", 0))
+    max_attempts = int(state.get("max_attempts", 3))
+
+    if not latest:
         return {
-            "evaluation_result": "needs_retry",
-            "events": [make_event("evaluate", "completed", "tool result indicates failure, retry needed")],
+            "evaluation_result": "no_result",
+            "events": [make_event("evaluate", "completed", "no tool result to evaluate")],
         }
+
+    # Simple heuristic: treat any tool output containing ERROR as transient failure
+    if "ERROR" in latest.upper():
+        result = "needs_retry"
+        msg = "tool result indicates failure, retry needed"
+        # If we've already reached max attempts, mark as exhausted here — routing will
+        # perform the dead-letter escalation based on attempt/max_attempts.
+        if attempt >= max_attempts:
+            result = "max_retry_exhausted"
+            msg = "tool result failing and max attempts reached"
+        return {
+            "evaluation_result": result,
+            "events": [make_event("evaluate", "completed", msg, attempt=attempt, max_attempts=max_attempts)],
+        }
+
     return {
         "evaluation_result": "success",
-        "events": [make_event("evaluate", "completed", "tool result satisfactory")],
+        "events": [make_event("evaluate", "completed", "tool result satisfactory", attempt=attempt)],
     }
 
 
@@ -172,9 +190,13 @@ def dead_letter_node(state: AgentState) -> dict:
     Third layer of error strategy: retry -> fallback -> dead letter.
     TODO(student): persist to dead-letter queue, alert on-call, or create support ticket.
     """
+    attempt = int(state.get("attempt", 0))
+    msg = f"max retries exceeded, attempt={attempt}"
     return {
+        # "route": Route.DEAD_LETTER.value,
         "final_answer": "Request could not be completed after maximum retry attempts. Logged for manual review.",
-        "events": [make_event("dead_letter", "completed", f"max retries exceeded, attempt={state.get('attempt', 0)}")],
+        "errors": [f"dead_letter: {msg}"],
+        "events": [make_event("dead_letter", "completed", msg, attempt=attempt)],
     }
 
 

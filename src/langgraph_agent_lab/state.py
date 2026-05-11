@@ -40,9 +40,13 @@ class ApprovalDecision(BaseModel):
 
 class AgentState(TypedDict, total=False):
     """LangGraph state.
+        State fields and reducer conventions:
 
-    TODO(student): decide which fields should be append-only and which should be overwritten.
-    The current annotations give a safe starting point for auditability.
+        - Append-only (audit): `messages`, `tool_results`, `errors`, `events`
+        - Overwritten (current value): `route`, `attempt`, `max_attempts`, `final_answer`,
+            `pending_question`, `proposed_action`, `approval`, `evaluation_result`
+
+        The current annotations give a safe starting point for grading and replay.
     """
 
     thread_id: str
